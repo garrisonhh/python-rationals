@@ -10,7 +10,7 @@ lib.from_float.restype = c_long
 
 
 class ToFloatResult(Structure):
-    _fields_ = [("valid", c_bool), ("value", c_float)]
+    _fields_ = [("valid", c_bool), ("value", c_double)]
 
 
 lib.to_float.argtypes = [c_long]

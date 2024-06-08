@@ -8,22 +8,28 @@ lib = CDLL(libpath)
 lib.from_float.argtypes = [c_double]
 lib.from_float.restype = c_long
 
+
 class ToFloatResult(Structure):
     _fields_ = [("valid", c_bool), ("value", c_float)]
 
+
 lib.to_float.argtypes = [c_long]
 lib.to_float.restype = ToFloatResult
+
 
 def declare_binop(obj):
     obj.argtypes = [c_long, c_long]
     obj.restype = c_long
 
+
 declare_binop(lib.add)
 declare_binop(lib.mul)
 declare_binop(lib.div)
 
+
 class String(Structure):
     _fields_ = [("len", c_uint), ("ptr", c_char_p)]
+
 
 lib.to_string.argtypes = [c_long]
 lib.to_string.restype = String
@@ -32,16 +38,20 @@ lib.free_string.restype = None
 
 lib.init()
 
+
 def deinit():
     """free resources currently used by the rational library"""
     lib.deinit()
 
+
 class RationalException(Exception):
     pass
+
 
 def _validate_handle(handle):
     if handle < 0:
         raise RationalException("rational library out of memory")
+
 
 class Rational:
     def __init__(self, value):
@@ -90,4 +100,3 @@ class Rational:
         res = cstr.ptr.decode("utf8")
         lib.free_string(cstr)
         return res
-

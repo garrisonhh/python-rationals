@@ -80,13 +80,6 @@ class Rational:
     def __truediv__(self, other):
         return self._binop(lib.div, other)
 
-    def to_float_fallible(self) -> Optional[float]:
-        """for those who hate python's error handling philosophy"""
-        res = lib.to_float(self.handle)
-        if not res.valid:
-            return None
-        return res.value
-
     def __float__(self) -> float:
         res = lib.to_float(self.handle)
         if not res.valid:

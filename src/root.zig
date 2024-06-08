@@ -91,14 +91,21 @@ export fn delete(id: c_long) void {
 
 /// a null ptr means an error happened
 const String = extern struct {
+    const Err = String{ .len = 0, .ptr = null };
+
     len: c_uint,
     ptr: ?[*:0]const u8,
 };
 
 export fn to_string(id: c_long) String {
     const value = pool.get(@enumFromInt(id));
-    const cstr = std.fmt.allocPrintZ(ally, "{d}/{d}", .{ value.p, value.q }) catch {
-        return String{ .len = 0, .ptr = null };
+    const q_str = value.q.toString(ally, 10, .upper) catch return String.Err;
+    defer ally.free(q_str);
+    const p_str = value.p.toString(ally, 10, .upper) catch return String.Err;
+    defer ally.free(p_str);
+
+    const cstr = std.fmt.allocPrintZ(ally, "{s}/{s}", .{ p_str, q_str }) catch {
+        return String.Err;
     };
     return .{
         .len = @intCast(cstr.len),

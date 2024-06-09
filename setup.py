@@ -5,5 +5,6 @@ setup(
     version="0.1.0",
     packages=["rationals"],
     package_dir={"rationals": "rationals"},
-    package_data={"rationals_wrapper": ["lib/librational.so"]},
+    package_data={"rationals": ["**/*.so"]},
+    include_package_data=True,
 )

@@ -43,10 +43,6 @@ const Pool = struct {
         return try self.new(r);
     }
 
-    fn toFloat(self: *const Self, id: Id) !f64 {
-        return self.get(id).toFloat(f64);
-    }
-
     fn new(self: *Self, value: big.Rational) !Id {
         if (self.free.removeOrNull()) |id| {
             self.items.items(.live)[@intFromEnum(id)] = true;
@@ -68,9 +64,38 @@ const Pool = struct {
         self.items.items(.rational)[@intFromEnum(id)].deinit();
     }
 
-    fn get(self: *const Self, id: Id) *big.Rational {
+    /// get a value when you know it's alive
+    fn mustGet(self: *const Self, id: Id) *big.Rational {
         std.debug.assert(self.items.items(.live)[@intFromEnum(id)]);
         return &self.items.items(.rational)[@intFromEnum(id)];
+    }
+
+    const IdError = error{
+        InvalidValue,
+        InvalidId,
+        DeadId,
+    };
+
+    fn idFromInt(self: *const Self, ffi_val: c_long) IdError!Id {
+        const TagInt = @typeInfo(Id).Enum.tag_type;
+        if (ffi_val < 0 or ffi_val > std.math.maxInt(TagInt)) {
+            return IdError.InvalidValue;
+        }
+
+        const n: TagInt = @intCast(ffi_val);
+        if (n >= self.items.len) {
+            return IdError.InvalidId;
+        }
+        if (!self.items.items(.live)[n]) {
+            return IdError.DeadId;
+        }
+        return @enumFromInt(n);
+    }
+
+    /// get a value from a c function when you don't know if it's valid
+    fn getFfi(self: *const Self, ffi_val: c_long) IdError!*big.Rational {
+        const id = try self.idFromInt(ffi_val);
+        return self.mustGet(id);
     }
 };
 
@@ -98,7 +123,7 @@ const String = extern struct {
 };
 
 export fn to_string(id: c_long) String {
-    const value = pool.get(@enumFromInt(id));
+    const value = pool.getFfi(id) catch return String.Err;
     const q_str = value.q.toString(ally, 10, .upper) catch return String.Err;
     defer ally.free(q_str);
     const p_str = value.p.toString(ally, 10, .upper) catch return String.Err;
@@ -126,18 +151,21 @@ export fn from_float(value: f64) c_long {
 }
 
 const ToFloatResult = extern struct {
+    const Err = ToFloatResult{
+        .valid = false,
+        .value = undefined,
+    };
+
     valid: bool,
     value: f64,
 };
 
 export fn to_float(id: c_long) ToFloatResult {
-    const value = pool.toFloat(@enumFromInt(id)) catch return .{
-        .valid = false,
-        .value = undefined,
-    };
+    const rational = pool.getFfi(id) catch return ToFloatResult.Err;
+    const float = rational.toFloat(f64) catch return ToFloatResult.Err;
     return .{
         .valid = true,
-        .value = value,
+        .value = float,
     };
 }
 
@@ -152,8 +180,8 @@ fn threeway(
 ) fn (c_long, c_long) c_long {
     return struct {
         fn f(a: c_long, b: c_long) c_long {
-            const x = pool.get(@enumFromInt(a));
-            const y = pool.get(@enumFromInt(b));
+            const x = pool.getFfi(a) catch return -1;
+            const y = pool.getFfi(b) catch return -1;
 
             var res = big.Rational.init(ally) catch return -1;
             func(&res, x.*, y.*) catch return -1;

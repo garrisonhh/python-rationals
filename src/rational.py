@@ -27,6 +27,8 @@ declare_binop(lib.sub)
 declare_binop(lib.mul)
 declare_binop(lib.div)
 
+lib.is_zero.argtypes = [c_long]
+lib.is_zero.restype = c_int
 
 class String(Structure):
     _fields_ = [("len", c_uint), ("ptr", c_char_p)]
@@ -51,7 +53,7 @@ class RationalException(Exception):
 
 def _validate_handle(handle):
     if handle < 0:
-        raise RationalException("rational library out of memory")
+        raise RationalException()
 
 
 class Rational:
@@ -66,6 +68,12 @@ class Rational:
 
     def __del__(self):
         lib.delete(self.handle)
+
+    def is_zero(self):
+        result = lib.is_zero(self.handle)
+        if result < 0:
+            return RationalException("invalid handle")
+        return result != 0
 
     def _binop(self, func, other):
         res_handle = func(self.handle, other.handle)
@@ -82,6 +90,9 @@ class Rational:
         return self._binop(lib.mul, other)
 
     def __truediv__(self, other):
+        if other.is_zero():
+            return RationalException("attempted to divide by zero")
+
         return self._binop(lib.div, other)
 
     def __float__(self) -> float:

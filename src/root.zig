@@ -12,7 +12,7 @@ const Pool = struct {
     const Self = @This();
 
     const Entry = struct {
-        live: bool = true,
+        refs: u32,
         rational: big.Rational,
     };
 
@@ -45,13 +45,14 @@ const Pool = struct {
 
     fn new(self: *Self, value: big.Rational) !Id {
         if (self.free.removeOrNull()) |id| {
-            self.items.items(.live)[@intFromEnum(id)] = true;
+            self.items.items(.refs)[@intFromEnum(id)] = 1;
             self.items.items(.rational)[@intFromEnum(id)] = value;
 
             return id;
         } else {
             const id: Id = @enumFromInt(self.items.len);
             try self.items.append(ally, .{
+                .refs = 1,
                 .rational = value,
             });
 
@@ -59,14 +60,25 @@ const Pool = struct {
         }
     }
 
-    fn del(self: *Self, id: Id) void {
-        self.items.items(.live)[@intFromEnum(id)] = false;
-        self.items.items(.rational)[@intFromEnum(id)].deinit();
+    /// increment id reference count
+    fn ref(self: *Self, id: Id) void {
+        std.debug.assert(self.items.items(.refs)[@intFromEnum(id)] > 0);
+	self.items.items(.refs)[@intFromEnum(id)] += 1;
     }
 
-    /// get a value when you know it's alive
+    /// decrement id reference count
+    fn del(self: *Self, id: Id) void {
+        const refs = &self.items.items(.refs)[@intFromEnum(id)];
+        std.debug.assert(refs.* > 0);
+        refs.* -= 1;
+        if (refs.* == 0) {
+            self.items.items(.rational)[@intFromEnum(id)].deinit();
+        }
+    }
+
+    /// get a value when you know it's arefs
     fn mustGet(self: *const Self, id: Id) *big.Rational {
-        std.debug.assert(self.items.items(.live)[@intFromEnum(id)]);
+        std.debug.assert(self.items.items(.refs)[@intFromEnum(id)] > 0);
         return &self.items.items(.rational)[@intFromEnum(id)];
     }
 
@@ -86,7 +98,7 @@ const Pool = struct {
         if (n >= self.items.len) {
             return IdError.InvalidId;
         }
-        if (!self.items.items(.live)[n]) {
+        if (self.items.items(.refs)[n] == 0) {
             return IdError.DeadId;
         }
         return @enumFromInt(n);
@@ -209,9 +221,49 @@ export fn sub(a: c_long, b: c_long) c_long {
 }
 
 export fn mul(a: c_long, b: c_long) c_long {
-    return threeway(big.Rational.mul)(a, b);
+    const a_id = check(pool.idFromInt(a)) catch return -1;
+    const x = pool.mustGet(a_id);
+    if (x.p.eqlZero()) {
+        pool.ref(a_id);
+        return a;
+    }
+
+    const b_id = check(pool.idFromInt(b)) catch return -1;
+    const y = pool.mustGet(b_id);
+    if (y.p.eqlZero()) {
+        pool.ref(b_id);
+        return b;
+    }
+
+    var res = check(big.Rational.init(ally)) catch return -1;
+    check(big.Rational.mul(&res, x.*, y.*)) catch return -1;
+    const id = check(pool.new(res)) catch return -1;
+
+    return @intFromEnum(id);
 }
 
 export fn div(a: c_long, b: c_long) c_long {
-    return threeway(big.Rational.div)(a, b);
+    const a_id = check(pool.idFromInt(a)) catch return -1;
+    const x = pool.mustGet(a_id);
+    if (x.p.eqlZero()) {
+        pool.ref(a_id);
+        return a;
+    }
+    const y = check(pool.getFfi(b)) catch return -1;
+    if (y.p.eqlZero()) return -1;
+
+    var res = check(big.Rational.init(ally)) catch return -1;
+    check(big.Rational.div(&res, x.*, y.*)) catch return -1;
+    const id = check(pool.new(res)) catch return -1;
+
+    return @intFromEnum(id);
+}
+
+/// returns:
+/// - negative if this is an invalid id
+/// - 1 if a is zero
+/// - 0 if a is not zero
+export fn is_zero(a: c_long) c_int {
+    const x = check(pool.getFfi(a)) catch return -1;
+    return @intFromBool(x.p.eqlZero());
 }

@@ -23,6 +23,7 @@ def declare_binop(obj):
 
 
 declare_binop(lib.add)
+declare_binop(lib.sub)
 declare_binop(lib.mul)
 declare_binop(lib.div)
 
@@ -55,7 +56,7 @@ def _validate_handle(handle):
 
 class Rational:
     def __init__(self, value):
-        self.handle = lib.from_float(c_double(value))
+        self.handle = lib.from_float(float(value))
 
     @classmethod
     def from_handle(cls, handle):
@@ -73,6 +74,9 @@ class Rational:
 
     def __add__(self, other):
         return self._binop(lib.add, other)
+
+    def __sub__(self, other):
+        return self._binop(lib.sub, other)
 
     def __mul__(self, other):
         return self._binop(lib.mul, other)

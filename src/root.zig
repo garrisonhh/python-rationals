@@ -114,6 +114,14 @@ export fn delete(id: c_long) void {
     pool.del(@enumFromInt(id));
 }
 
+fn check(x: anytype) @TypeOf(x) {
+    comptime std.debug.assert(@typeInfo(@TypeOf(x)) == .ErrorUnion);
+    return x catch |e| {
+        log.err("error: {s}", .{@errorName(e)});
+        return e;
+    };
+}
+
 /// a null ptr means an error happened
 const String = extern struct {
     const Err = String{ .len = 0, .ptr = null };
@@ -123,13 +131,13 @@ const String = extern struct {
 };
 
 export fn to_string(id: c_long) String {
-    const value = pool.getFfi(id) catch return String.Err;
-    const q_str = value.q.toString(ally, 10, .upper) catch return String.Err;
+    const value = check(pool.getFfi(id)) catch return String.Err;
+    const q_str = check(value.q.toString(ally, 10, .upper)) catch return String.Err;
     defer ally.free(q_str);
-    const p_str = value.p.toString(ally, 10, .upper) catch return String.Err;
+    const p_str = check(value.p.toString(ally, 10, .upper)) catch return String.Err;
     defer ally.free(p_str);
 
-    const cstr = std.fmt.allocPrintZ(ally, "{s}/{s}", .{ p_str, q_str }) catch {
+    const cstr = check(std.fmt.allocPrintZ(ally, "{s}/{s}", .{ p_str, q_str })) catch {
         return String.Err;
     };
     return .{
@@ -146,7 +154,7 @@ export fn free_string(str: String) void {
 
 /// returns a valid id or -1 for error
 export fn from_float(value: f64) c_long {
-    const id = pool.fromFloat(value) catch return -1;
+    const id = check(pool.fromFloat(value)) catch return -1;
     return @intFromEnum(id);
 }
 
@@ -161,8 +169,8 @@ const ToFloatResult = extern struct {
 };
 
 export fn to_float(id: c_long) ToFloatResult {
-    const rational = pool.getFfi(id) catch return ToFloatResult.Err;
-    const float = rational.toFloat(f64) catch return ToFloatResult.Err;
+    const rational = check(pool.getFfi(id)) catch return ToFloatResult.Err;
+    const float = check(rational.toFloat(f64)) catch return ToFloatResult.Err;
     return .{
         .valid = true,
         .value = float,
@@ -180,12 +188,12 @@ fn threeway(
 ) fn (c_long, c_long) c_long {
     return struct {
         fn f(a: c_long, b: c_long) c_long {
-            const x = pool.getFfi(a) catch return -1;
-            const y = pool.getFfi(b) catch return -1;
+            const x = check(pool.getFfi(a)) catch return -1;
+            const y = check(pool.getFfi(b)) catch return -1;
 
-            var res = big.Rational.init(ally) catch return -1;
-            func(&res, x.*, y.*) catch return -1;
-            const id = pool.new(res) catch return -1;
+            var res = check(big.Rational.init(ally)) catch return -1;
+            check(func(&res, x.*, y.*)) catch return -1;
+            const id = check(pool.new(res)) catch return -1;
 
             return @intFromEnum(id);
         }
@@ -194,6 +202,10 @@ fn threeway(
 
 export fn add(a: c_long, b: c_long) c_long {
     return threeway(big.Rational.add)(a, b);
+}
+
+export fn sub(a: c_long, b: c_long) c_long {
+    return threeway(big.Rational.sub)(a, b);
 }
 
 export fn mul(a: c_long, b: c_long) c_long {

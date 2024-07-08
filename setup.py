@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="rationals",
-    version="0.1.0",
+    version="0.1.1",
     packages=["rationals"],
     package_dir={"rationals": "rationals"},
     package_data={"rationals": ["**/*.so"]},

@@ -37,6 +37,17 @@ const Pool = struct {
         self.free.deinit();
     }
 
+    /// parses a rational from two integers separated by a slash, like `12/34`
+    fn fromFractString(self: *Self, str: []const u8) !Id {
+        const slash = std.mem.indexOf(u8, str, "/") orelse {
+            return error.NotFraction;
+        };
+        var r = try big.Rational.init(ally);
+        try r.p.setString(10, str[0..slash]);
+        try r.q.setString(10, str[slash + 1 ..]);
+        return try self.new(r);
+    }
+
     fn fromFloat(self: *Self, value: f64) !Id {
         var r = try big.Rational.init(ally);
         try r.setFloat(f64, value);
@@ -63,7 +74,7 @@ const Pool = struct {
     /// increment id reference count
     fn ref(self: *Self, id: Id) void {
         std.debug.assert(self.items.items(.refs)[@intFromEnum(id)] > 0);
-	self.items.items(.refs)[@intFromEnum(id)] += 1;
+        self.items.items(.refs)[@intFromEnum(id)] += 1;
     }
 
     /// decrement id reference count
@@ -162,6 +173,13 @@ export fn free_string(str: String) void {
     if (str.ptr) |ptr| {
         ally.free(ptr[0..str.len :0]);
     }
+}
+
+/// returns a valid id or -1 for error
+export fn from_string(bytes: [*]const u8, len: usize) c_long {
+    const str = bytes[0..len];
+    const id = pool.fromFractString(str) catch return -1;
+    return @intFromEnum(id);
 }
 
 /// returns a valid id or -1 for error

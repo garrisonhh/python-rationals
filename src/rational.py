@@ -38,6 +38,8 @@ lib.to_string.argtypes = [c_long]
 lib.to_string.restype = String
 lib.free_string.argtypes = [String]
 lib.free_string.restype = None
+lib.from_string.argtypes = [c_char_p, c_ulong]
+lib.from_string.restype = c_long
 
 lib.init()
 
@@ -62,6 +64,16 @@ class Rational:
 
     @classmethod
     def from_handle(cls, handle):
+        this = super().__new__(cls)
+        this.handle = handle
+        return this
+
+    @classmethod
+    def from_string(cls, string):
+        cstr = c_char_p(string.encode('utf-8'))
+        handle = lib.from_string(cstr, len(string))
+        _validate_handle(handle)
+
         this = super().__new__(cls)
         this.handle = handle
         return this

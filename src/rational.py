@@ -21,11 +21,20 @@ def declare_binop(obj):
     obj.argtypes = [c_long, c_long]
     obj.restype = c_long
 
+def declare_cond(obj):
+    obj.argtypes = [c_long, c_long]
+    obj.restype = c_int
 
 declare_binop(lib.add)
 declare_binop(lib.sub)
 declare_binop(lib.mul)
 declare_binop(lib.div)
+declare_cond(lib.eq)
+declare_cond(lib.neq)
+declare_cond(lib.gt)
+declare_cond(lib.lt)
+declare_cond(lib.gte)
+declare_cond(lib.lte)
 
 lib.is_zero.argtypes = [c_long]
 lib.is_zero.restype = c_int
@@ -92,6 +101,12 @@ class Rational:
         _validate_handle(res_handle)
         return Rational.from_handle(res_handle)
 
+    def _cond(self, func, other):
+        res = func(self.handle, other.handle)
+        if res < 0:
+            return RationalException("conditional failure")
+        return res != 0
+
     def __add__(self, other):
         return self._binop(lib.add, other)
 
@@ -106,6 +121,24 @@ class Rational:
             return RationalException("attempted to divide by zero")
 
         return self._binop(lib.div, other)
+
+    def __eq__(self, other):
+        return self._cond(lib.eq, other)
+
+    def __ne__(self, other):
+        return self._cond(lib.neq, other)
+
+    def __lt__(self, other):
+        return self._cond(lib.lt, other)
+
+    def __gt__(self, other):
+        return self._cond(lib.gt, other)
+
+    def __le__(self, other):
+        return self._cond(lib.lte, other)
+
+    def __ge__(self, other):
+        return self._cond(lib.gte, other)
 
     def __float__(self) -> float:
         res = lib.to_float(self.handle)

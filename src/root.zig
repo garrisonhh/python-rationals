@@ -230,6 +230,23 @@ fn threeway(
     }.f;
 }
 
+/// given a 3-way conditional operator, produce a function performing this
+/// operation on pool ids, returning a negative value on error
+fn conditional(
+    comptime op: std.math.CompareOperator,
+) fn (c_long, c_long) c_int {
+    return struct {
+        fn f(a: c_long, b: c_long) c_int {
+            const x = check(pool.getFfi(a)) catch return -1;
+            const y = check(pool.getFfi(b)) catch return -1;
+
+            const order = x.order(y.*) catch return -1;
+            const res = order.compare(op);
+            return @intFromBool(res);
+        }
+    }.f;
+}
+
 export fn add(a: c_long, b: c_long) c_long {
     return threeway(big.Rational.add)(a, b);
 }
@@ -275,6 +292,30 @@ export fn div(a: c_long, b: c_long) c_long {
     const id = check(pool.new(res)) catch return -1;
 
     return @intFromEnum(id);
+}
+
+export fn eq(a: c_long, b: c_long) c_int {
+    return conditional(.eq)(a, b);
+}
+
+export fn neq(a: c_long, b: c_long) c_int {
+    return conditional(.neq)(a, b);
+}
+
+export fn lt(a: c_long, b: c_long) c_int {
+    return conditional(.lt)(a, b);
+}
+
+export fn gt(a: c_long, b: c_long) c_int {
+    return conditional(.gt)(a, b);
+}
+
+export fn lte(a: c_long, b: c_long) c_int {
+    return conditional(.lte)(a, b);
+}
+
+export fn gte(a: c_long, b: c_long) c_int {
+    return conditional(.gte)(a, b);
 }
 
 /// returns:
